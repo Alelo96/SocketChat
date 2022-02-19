@@ -6,8 +6,10 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 
 public class Server {
     public static void main(String[] args) {
@@ -16,10 +18,9 @@ public class Server {
     }
 }
 class ServerWindow extends JFrame implements Runnable{
-
     private JTextArea textArea;
 
-    public ServerWindow() {
+    public ServerWindow() { //Interfície gràfica
         setBounds(1200,300,280,350);
         JPanel BorderServerWindow = new JPanel();
         BorderServerWindow.setLayout(new BorderLayout());
@@ -38,12 +39,12 @@ class ServerWindow extends JFrame implements Runnable{
 
             String nickName, ip, message;
             SendPackage receivedPackage;
-
+            ArrayList <String> ipList = new ArrayList<>();
 
             while(true){
                 Socket socket = server.accept();
 
-                //Agafem les del client
+                //Agafem les dades del client
                 ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
 
                 receivedPackage = (SendPackage)in.readObject();
@@ -51,17 +52,39 @@ class ServerWindow extends JFrame implements Runnable{
                 ip = receivedPackage.getIp();
                 message = receivedPackage.getMessage();
 
-                textArea.append("\n"+nickName + ": "+message+" to "+ip);
+                if(!message.equals(" online")) {
 
-                Socket sendMessage = new Socket(ip, 9090);
+                    textArea.append("\n" + nickName + ": " + message + " to " + ip);
 
-                //Enviem les dades al client
-                ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
-                sendPackage.writeObject(receivedPackage);
-                sendPackage.close();
-                sendMessage.close();
+                    Socket sendMessage = new Socket(ip, 9090);
 
-                socket.close();
+                    //Enviem les dades al client
+                    ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
+                    sendPackage.writeObject(receivedPackage);
+                    sendPackage.close();
+                    sendMessage.close();
+
+                    socket.close();
+                }else{
+                    //Online detection ------------------------------
+                    InetAddress localization = socket.getInetAddress();
+                    String remoteIp = localization.getHostAddress();//Agafem la ip del client
+
+                    ipList.add(remoteIp);
+                    receivedPackage.setIpList(ipList); //Posem les ip al arrayList
+
+                    for (String ipStrng:ipList) {
+                        Socket sendMessage = new Socket(ipStrng, 9090);
+
+                        //Enviem les dades al client
+                        ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
+                        sendPackage.writeObject(receivedPackage);
+                        sendPackage.close();
+                        sendMessage.close();
+
+                        socket.close();
+                    }
+                }
             }
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
