@@ -2,6 +2,8 @@ package chat;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -19,18 +21,68 @@ public class Server {
 }
 class ServerWindow extends JFrame implements Runnable{
     private JTextArea textArea;
+    private JComboBox online;
+    private JButton ban;
+    ArrayList <String> ipList = new ArrayList<>();
 
     public ServerWindow() { //Interfície gràfica
         setBounds(1200,300,280,350);
         JPanel BorderServerWindow = new JPanel();
-        BorderServerWindow.setLayout(new BorderLayout());
-        textArea = new JTextArea();
+//        BorderServerWindow.setLayout(new BorderLayout());
+        textArea = new JTextArea(12,30);
         BorderServerWindow.add(textArea, BorderLayout.CENTER);
+        online = new JComboBox();
+        BorderServerWindow.add(online);
+        ban = new JButton("Ban");
+        BorderServerWindow.add(ban);
+        ServerWindow.banIp myEvent = new ServerWindow.banIp();
+        ban.addActionListener(myEvent);
         add(BorderServerWindow);
         setVisible(true);
 
         Thread thread = new Thread(this);
         thread.start();
+    }
+
+    private class banIp implements ActionListener {
+        public void actionPerformed(ActionEvent e) {
+            String selectedItem = online.getSelectedItem().toString();
+            ipList.remove(selectedItem);
+
+            SendPackage receivedPackage = new SendPackage();
+            receivedPackage.setIpList(ipList); //Posem les ip al arrayList
+            receivedPackage.setConType(1);
+
+            try {
+                for (String ipStrng:ipList) {
+                    Socket sendMessage = new Socket(ipStrng, 9090);
+
+                    //Enviem les dades al client
+                    ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
+                    sendPackage.writeObject(receivedPackage);
+                    sendPackage.close();
+                    sendMessage.close();
+                }
+            } catch (IOException ex) {
+                System.out.println(ex.getMessage());
+            }
+
+            SendPackage bannedPackage = new SendPackage();
+            bannedPackage.setMessage("You have been banned");
+            bannedPackage.setConType(3);
+
+            try {
+                Socket sendMessage = new Socket(selectedItem, 9090);
+
+                //Enviem les dades al client
+                ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
+                sendPackage.writeObject(bannedPackage); //Enviem a l'usuari a eliminar un paquet de tipus 3
+                sendPackage.close();
+                sendMessage.close();
+            } catch (IOException ex) {
+                System.out.println(ex.getMessage());
+            }
+        }
     }
 
     public void run() {
@@ -39,7 +91,7 @@ class ServerWindow extends JFrame implements Runnable{
 
             String nickName, ip, message;
             SendPackage receivedPackage;
-            ArrayList <String> ipList = new ArrayList<>();
+            int conType;
 
             while(true){
                 Socket socket = server.accept();
@@ -51,30 +103,35 @@ class ServerWindow extends JFrame implements Runnable{
                 nickName = receivedPackage.getNickName();
                 ip = receivedPackage.getIp();
                 message = receivedPackage.getMessage();
+                conType = receivedPackage.getConType();
 
-                if(!message.equals(" online")) {
+                switch (conType){
+                    case 1:
+                        //Online detection ------------------------------
+                        InetAddress localization = socket.getInetAddress();
+                        String remoteIp = localization.getHostAddress();//Agafem la ip del client
 
-                    textArea.append("\n" + nickName + ": " + message + " to " + ip);
+                        ipList.add(remoteIp);
+                        online.removeAllItems();
+                        online.addItem(remoteIp);
+                        receivedPackage.setIpList(ipList); //Posem les ip al arrayList
 
-                    Socket sendMessage = new Socket(ip, 9090);
+                        for (String ipStrng:ipList) {
+                            Socket sendMessage = new Socket(ipStrng, 9090);
 
-                    //Enviem les dades al client
-                    ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
-                    sendPackage.writeObject(receivedPackage);
-                    sendPackage.close();
-                    sendMessage.close();
+                            //Enviem les dades al client
+                            ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
+                            sendPackage.writeObject(receivedPackage);
+                            sendPackage.close();
+                            sendMessage.close();
 
-                    socket.close();
-                }else{
-                    //Online detection ------------------------------
-                    InetAddress localization = socket.getInetAddress();
-                    String remoteIp = localization.getHostAddress();//Agafem la ip del client
+                            socket.close();
+                        }
+                        break;
+                    case 2:
+                        textArea.append("\n" + nickName + ": " + message + " to " + ip);
 
-                    ipList.add(remoteIp);
-                    receivedPackage.setIpList(ipList); //Posem les ip al arrayList
-
-                    for (String ipStrng:ipList) {
-                        Socket sendMessage = new Socket(ipStrng, 9090);
+                        Socket sendMessage = new Socket(ip, 9090);
 
                         //Enviem les dades al client
                         ObjectOutputStream sendPackage = new ObjectOutputStream(sendMessage.getOutputStream());
@@ -83,12 +140,11 @@ class ServerWindow extends JFrame implements Runnable{
                         sendMessage.close();
 
                         socket.close();
-                    }
+                        break;
                 }
             }
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
-
     }
 }

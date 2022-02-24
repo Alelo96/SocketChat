@@ -40,7 +40,8 @@ class OnlinePackage extends WindowAdapter{
             Socket socket = new Socket("127.0.0.1", 9999);
             SendPackage data = new SendPackage();
 
-            data.setMessage(" online");
+//            data.setMessage(" online");
+            data.setConType(1);
             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
             out.writeObject(data);
 
@@ -49,6 +50,7 @@ class OnlinePackage extends WindowAdapter{
         }catch (Exception ex) {
             System.out.println(e);
         }
+        super.windowOpened(e);
     }
 }
 
@@ -101,23 +103,31 @@ class WindowBorderClient extends JPanel implements Runnable{
                 ObjectInputStream in = new ObjectInputStream(client.getInputStream());
                 receivedSocket = (SendPackage) in.readObject();
 
-                //En cas de no haber escrit cap missatge es mostra el missatge
-                if(!receivedSocket.getMessage().equals(" online"))  chatTextArea.append("\n"+ receivedSocket.getNickName() + ": "+receivedSocket.getMessage());
-                //Si no mostra l'array amb les IP dels usuaris conectats
-                else {
-                    chatTextArea.append("\n" + receivedSocket.getIpList());
+                switch (receivedSocket.getConType()) {
+                    case 1: //Actualitzar la llista d'ips
+                        chatTextArea.append("\n" + receivedSocket.getIpList());
 
-                    ArrayList<String> ipsMenu = new ArrayList<>();
-                    ipsMenu = receivedSocket.getIpList(); //Agafem totes les IPs
+                        ArrayList<String> ipsMenu = new ArrayList<>();
+                        ipsMenu = receivedSocket.getIpList(); //Agafem totes les IPs
 
-                    ip.removeAllItems(); //Buidem el JComboBox
+                        ip.removeAllItems(); //Buidem el JComboBox
 
-                    //Afegim les IPs al JComboBox amb format String
-                    for(String ipString : ipsMenu){
-                        ip.addItem(ipString);
-                    }
+                        //Afegim les IPs al JComboBox amb format String
+                        for(String ipString : ipsMenu) {
+                            ip.addItem(ipString);
+                        }
+                        break;
+
+                    case 2:
+                        chatTextArea.append("\n"+ receivedSocket.getNickName() + ": "+receivedSocket.getMessage());
+                        break;
+
+                    case 3:
+                        JFrame jFrame = new JFrame();
+                        JOptionPane.showMessageDialog(jFrame, receivedSocket.getMessage());
+                        ip.removeAllItems();
+                        break;
                 }
-
             }
         }catch (Exception e){
             System.out.println(e);
@@ -135,6 +145,7 @@ class WindowBorderClient extends JPanel implements Runnable{
                 data.setNickName(nickName.getText());
                 data.setIp(ip.getSelectedItem().toString());
                 data.setMessage(message.getText());
+                data.setConType(2);
 
                 ObjectOutputStream out = new ObjectOutputStream(mySocket.getOutputStream());
                 out.writeObject(data);
@@ -151,6 +162,10 @@ class WindowBorderClient extends JPanel implements Runnable{
 class SendPackage implements Serializable {
     private String nickName, ip, message;
     private ArrayList <String> ipList;
+    private int conType;
+    final int establishCon = 1;
+    final int sendMessage = 2;
+    final int banMessage = 3;
 
     public String getNickName() {
         return nickName;
@@ -182,6 +197,14 @@ class SendPackage implements Serializable {
 
     public void setIpList(ArrayList<String> ipList) {
         this.ipList = ipList;
+    }
+
+    public int getConType() {
+        return conType;
+    }
+
+    public void setConType(int conType) {
+        this.conType = conType;
     }
 
 
